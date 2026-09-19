@@ -1,0 +1,12 @@
+version: 2
+
+sources:
+  - name: raw_dxlinea
+    database: DXLINEA_INTERVIEW
+    schema: RAW_DXLINEA
+    tables:
+      - name: SFDC_OPPORTUNITY
+      - name: MKT_LEAD
+      - name: MKT_CAMPAIGN
+      - name: SFDC_ACCOUNT
+      - name: MKT_TOUCHPOINT

@@ -36,11 +36,11 @@ def generate_snowflake_ddl(parquet_files: list[Path]) -> None:
         df = pd.read_parquet(file_path)
         columns = df.columns.tolist()
 
-        # Build SELECT column list pointing to $1:col_name
+        # Build SELECT column list pointing to $1:col_name without quotes on the alias
         select_cols = []
         for col in columns:
             safe_col = col.replace('"', '""')
-            select_cols.append(f"    $1:\"{safe_col}\"::VARCHAR AS \"{col}\"")
+            select_cols.append(f"    $1:\"{safe_col}\"::VARCHAR AS {col}")
 
         cols_sql = ",\n".join(select_cols)
 

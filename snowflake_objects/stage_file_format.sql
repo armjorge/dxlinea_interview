@@ -2,6 +2,10 @@
 CREATE DATABASE IF NOT EXISTS dxlinea_interview;
 CREATE SCHEMA IF NOT EXISTS dxlinea_interview.raw_dxlinea;
 
+
+CREATE SCHEMA IF NOT EXISTS dxlinea_interview.wrk_dxlinea;
+CREATE SCHEMA IF NOT EXISTS dxlinea_interview.pub_dxlinea;
+
 -- 2. Switch to the new database and schema context
 USE DATABASE dxlinea_interview;
 USE SCHEMA raw_dxlinea;
