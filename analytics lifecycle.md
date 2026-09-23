@@ -30,8 +30,23 @@ Needed work models derived from the analysis will be stored with the prefix wrK_
 
 1. Profile the data before you trust it
 
+- 01 Data profiling  - Referential integrity.sql
+    - Not critical findings, all the entities contains a unique not null primary key. 
+- 01 Data profiling - Entity Integrity
+    - Join between MKT_LEAD and MKT_CAMPAIGN without findings, all the leads are linked to a campaign
+    - Join between MKT_TOUCHPOINT and MKT_CAMPAIGN without findings, all the interactions are linked to a campaign
+    - Join between MKT_TOUCHPOINT and STG_MKT_LEAD without findings, all the interactions are linked to a lead
+    - Join between SFDC_OPPORTUNITY and MKT_LEAD, only 80% of the opportunities are linked to a lead
+    - Join betwee STG_SFDC_ACCOUNT and STG_SFDC_OPPORTUNITY: 
+      - Parent Table (SFDC_ACCOUNT): Acts as the master entity. It holds the primary key (account_id), meaning every row is a unique company or organization.
+      - SFDC_OPPORTUNITY): Holds the foreign key (account_id) pointing back to the account. Because multiple opportunities can belong to a single account, the foreign key lives here, not on the account table.
+      - The 20% "Unlinked": These represent accounts that exist in the CRM database as prospects or clients, but have never had a commercial deal/opportunity opened against them yet.
+
 ## Analyze
+
 2. Write the SQL you would run
+
+   
 3. Answer Priya's three questions
 
 ## Share
