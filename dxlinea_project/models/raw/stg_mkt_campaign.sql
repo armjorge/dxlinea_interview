@@ -15,13 +15,14 @@ renamed as (
         region,
         target_segment,
         fiscal_quarter,
-        start_date,
-        end_date,
+        to_date(start_date) as start_date,
+        to_date(end_date) as end_date,
         currency_code,
-        fx_rate_to_usd,
-        planned_spend_local,
-        actual_spend_local,
-        is_active
+        cast(fx_rate_to_usd as numeric(18,2)) as fx_rate_to_usd,
+        cast(planned_spend_local as numeric(18,2)) as planned_spend_local,
+        cast(actual_spend_local as numeric(18,2)) as actual_spend_local,
+        cast(is_active as boolean) as is_active
+
 
     from source
 

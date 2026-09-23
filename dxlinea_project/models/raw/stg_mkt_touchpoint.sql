@@ -10,11 +10,12 @@ renamed as (
         touchpoint_id,
         lead_id,
         campaign_id,
-        touch_date,
-        touch_seq,
+        to_date(touch_date) as touch_date,
+        cast(touch_seq as integer) as touch_seq,
         touch_type,
-        attribution_weight_first,
-        attribution_weight_last
+        cast(attribution_weight_first as numeric(2,1)) as attribution_weight_first,
+        cast(attribution_weight_last as numeric(2,1)) as attribution_weight_last
+
 
     from source
 

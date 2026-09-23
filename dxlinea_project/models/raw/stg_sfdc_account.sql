@@ -14,8 +14,8 @@ renamed as (
         industry,
         sales_segment,
         employee_band,
-        is_customer,
-        first_closed_won_date,
+        cast(is_customer as boolean) as is_customer,
+        to_date(first_closed_won_date) as first_closed_won_date,
         account_owner
 
     from source

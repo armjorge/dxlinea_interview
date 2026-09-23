@@ -1,0 +1,165 @@
+version: 2
+
+models:
+  - name: stg_mkt_campaign
+    description: "One row per campaign. Spend is recorded here."
+    columns:
+      - name: campaign_id
+        description: "Primary key, e.g. CMP-1001"
+        tests:
+          - unique
+          - not_null
+      - name: campaign_name
+        description: "Human-entered label from the marketing platform"
+      - name: channel
+        description: "10 values, e.g. Paid Search - Brand, Field Event, Review Sites"
+      - name: sub_channel
+        description: "24 values - the platform or vendor inside a channel"
+      - name: program_type
+        description: "Demand Capture, Demand Creation, Lead Acquisition, Partner, Nurture"
+      - name: region
+        description: "NAM, EMEA, LATAM, APJ"
+      - name: target_segment
+        description: "Intended audience - Enterprise, Mid-Market, SMB"
+      - name: fiscal_quarter
+        description: "2025Q1 to 2026Q3. 2026Q3 covers July-August only"
+      - name: start_date
+        description: "Campaign window open"
+      - name: end_date
+        description: "Campaign window close"
+      - name: currency_code
+        description: "USD, EUR or GBP - the currency spend was booked in"
+      - name: fx_rate_to_usd
+        description: "Rate to convert local spend to USD"
+      - name: planned_spend_local
+        description: "Budgeted, in currency_code"
+      - name: actual_spend_local
+        description: "Invoiced, in currency_code"
+      - name: is_active
+        description: "Campaign still running as of the extract"
+
+  - name: stg_mkt_lead
+    description: "One row per lead record created in marketing automation."
+    columns:
+      - name: lead_id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        description: "Matched CRM account. Blank where no match was made"
+      - name: email
+        description: "Contact email"
+      - name: created_date
+        description: "When the lead entered the database"
+      - name: source_campaign_id
+        description: "Last-touch campaign credited by the platform -> mkt_campaign"
+      - name: lead_status
+        description: "New, Working, Nurture, MQL, Disqualified"
+      - name: mql_date
+        description: "Date the lead was marked marketing-qualified"
+      - name: is_disqualified
+        description: "Rejected by the SDR team"
+      - name: disqualify_reason
+        description: "7 values, e.g. Company too small, Invalid contact info"
+      - name: country
+        description: "Self-reported on the form"
+      - name: region
+        description: "NAM, EMEA, LATAM, APJ"
+      - name: industry
+        description: "Self-reported on the form"
+      - name: sales_segment
+        description: "Enterprise, Mid-Market, SMB"
+      - name: job_level
+        description: "C-Level, VP, Director, Manager, Individual Contributor, Student"
+
+  - name: stg_mkt_touchpoint
+    description: "One row per lead per marketing interaction. Covers ~72% of leads."
+    columns:
+      - name: touchpoint_id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: lead_id
+        description: "-> mkt_lead"
+      - name: campaign_id
+        description: "-> mkt_campaign"
+      - name: touch_date
+        description: "When the interaction happened"
+      - name: touch_seq
+        description: "Order of the touch within the lead's journey, 1 = first"
+      - name: touch_type
+        description: "9 values, e.g. Paid Click, Webinar Registration, Event Attendance"
+      - name: attribution_weight_first
+        description: "Platform's first-touch credit flag"
+      - name: attribution_weight_last
+        description: "Platform's last-touch credit flag"
+
+  - name: stg_sfdc_opportunity
+    description: "One row per opportunity. Includes marketing-sourced and sales-sourced deals."
+    columns:
+      - name: opportunity_id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        description: "-> sfdc_account"
+      - name: source_lead_id
+        description: "Converting lead -> mkt_lead. Blank for sales-sourced deals"
+      - name: primary_campaign_id
+        description: "Campaign the rep stamped on the deal. Often blank"
+      - name: opportunity_type
+        description: "New Business or Expansion"
+      - name: product_line
+        description: "Secret Server, Privilege Manager, Privileged Remote Access, Identity Threat Protection, Platform Bundle"
+      - name: sales_segment
+        description: "Enterprise, Mid-Market, SMB"
+      - name: region
+        description: "NAM, EMEA, LATAM, APJ"
+      - name: created_date
+        description: "Opportunity opened"
+      - name: close_date
+        description: "Closed, or forecast close if still open"
+      - name: stage_name
+        description: "Discovery, Technical Validation, Proposal, Negotiation, Closed Won, Closed Lost"
+      - name: is_closed
+        description: "Deal is no longer open"
+      - name: is_won
+        description: "Deal was won"
+      - name: term_months
+        description: "Contract length - 12, 24 or 36"
+      - name: amount_usd
+        description: "Total contract value across the full term"
+      - name: arr_usd
+        description: "Annual recurring revenue"
+      - name: sales_rep
+        description: "Owning account executive"
+
+  - name: stg_sfdc_account
+    description: "One row per CRM account."
+    columns:
+      - name: account_id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: account_name
+        description: "Anonymised"
+      - name: region
+        description: "NAM, EMEA, LATAM, APJ"
+      - name: country
+        description: "Billing country"
+      - name: industry
+        description: "10 values"
+      - name: sales_segment
+        description: "Enterprise, Mid-Market, SMB - the CRM's view, which may differ from the lead's"
+      - name: employee_band
+        description: "7 bands from 1-50 to 10000+"
+      - name: is_customer
+        description: "Has ever closed won"
+      - name: first_closed_won_date
+        description: "Blank for prospects"
+      - name: account_owner
+        description: "Owning account executive"

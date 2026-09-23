@@ -15,14 +15,14 @@ renamed as (
         product_line,
         sales_segment,
         region,
-        created_date,
-        close_date,
+        to_date(created_date) as created_date,
+        to_date(close_date) as close_date,
         stage_name,
-        is_closed,
-        is_won,
-        term_months,
-        amount_usd,
-        arr_usd,
+        cast(is_closed as boolean) as is_closed,
+        cast(is_won as boolean) as is_won,
+        cast(term_months as integer) as term_months,
+        cast(amount_usd as numeric(18,2)) as amount_usd,
+        cast(arr_usd as numeric(18,2)) as arr_usd,
         sales_rep
 
     from source
