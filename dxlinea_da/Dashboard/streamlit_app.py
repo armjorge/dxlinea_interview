@@ -1,97 +1,289 @@
-import streamlit as st
+
+
+import os
+import pathlib
 import pandas as pd
 import plotly.express as px
-from snowflake.snowpark.context import get_active_session
+import plotly.graph_objects as rx
+import streamlit as st
 
-# Page configuration
+# Set Streamlit Page Configuration
 st.set_page_config(
-    page_title="Sales Funnel Lead Distribution",
+    page_title="DXLinea - Executive Marketing & Pipeline Analysis",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-st.title("📊 Sales Funnel: Lead Status & Quarter Comparison")
-st.markdown("Track lead distribution changes across quarters natively inside Snowflake using fixed pipeline categories.")
+# ------------------------------------------------------------------------------
+# 1. HYBRID DATA LOADER (Snowflake + Local CSV Fallback)
+# ------------------------------------------------------------------------------
+@st.cache_data(show_spinner="Loading data...")
+def load_data():
+    use_snowflake = False
+    session = None
 
-# --- DATA LOADING FROM SNOWFLAKE ---
-@st.cache_data
-def load_funnel_data():
-    session = get_active_session()
-    query = "SELECT * FROM DXLINEA_INTERVIEW.WRK_DXLINEA.wrk_sales_funnel"
-    return session.sql(query).to_pandas()
+    # Check for Snowflake in Snowpark / Streamlit in Snowflake environment
+    try:
+        from snowflake.snowpark.context import get_active_session
 
-try:
-    df = load_funnel_data()
-except Exception as e:
-    st.error(f"Error loading data from Snowflake: {e}")
-    st.stop()
+        session = get_active_session()
+        use_snowflake = True
+    except Exception:
+        use_snowflake = False
 
-# Snowflake returns uppercase column names by default; ensure normalization
-df.columns = [c.upper() for c in df.columns]
+    if use_snowflake and session is not None:
+        # Load directly from Snowflake tables
+        query_funnel = "SELECT * FROM DXLINEA_INTERVIEW.WRK_DXLINEA.WRK_SALES_FUNNEL"
+        query_opps = (
+            "SELECT * FROM DXLINEA_INTERVIEW.WRK_DXLINEA.WRK_SFDC_OPPORTUNITIES_Q"
+        )
 
-# --- DEFINE FIXED CATEGORY ORDER ---
-fixed_categories = ['MQL', 'New', 'Working', 'Nurture', 'Disqualified']
+        df_funnel = session.sql(query_funnel).to_pandas()
+        df_opps = session.sql(query_opps).to_pandas()
+    else:
+        # Fallback to local CSV files (Navigating 3 levels up from Dashboard/ to src_files/)
+        current_dir = pathlib.Path(__file__).parent.resolve()
+        src_dir = (current_dir / ".." / ".." / ".." / "src_files").resolve()
 
-if 'LEAD_STATUS' in df.columns and 'LEAD_QUARTER' in df.columns:
-    df['LEAD_STATUS'] = pd.Categorical(df['LEAD_STATUS'], categories=fixed_categories, ordered=True)
+        csv_funnel_path = src_dir / "wrk_sales_funnel.csv"
+        csv_opps_path = src_dir / "wrk_sfdc_opportunities_q.csv"
 
-    # --- SIDEBAR CONTROLS ---
-    st.sidebar.header("Filter Options")
-    all_quarters = sorted(df['LEAD_QUARTER'].unique())
+        # Alternative relative fallback if folder tree varies slightly
+        if not csv_funnel_path.exists():
+            csv_funnel_path = "src_files/wrk_sales_funnel.csv"
+            csv_opps_path = "src_files/wrk_sfdc_opportunities_q.csv"
 
-    selected_quarters = st.sidebar.multiselect(
-        "Select Quarters to Compare:",
-        options=all_quarters,
-        default=all_quarters
+        df_funnel = pd.read_csv(csv_funnel_path)
+        df_opps = pd.read_csv(csv_opps_path)
+
+    # Standardize column headers to uppercase
+    df_funnel.columns = [c.upper() for c in df_funnel.columns]
+    df_opps.columns = [c.upper() for c in df_opps.columns]
+
+    return df_funnel, df_opps
+
+
+df_funnel, df_opps = load_data()
+
+# ------------------------------------------------------------------------------
+# 2. NAVIGATION & SIDEBAR FILTERS
+# ------------------------------------------------------------------------------
+st.sidebar.title("DXLinea Analytics")
+st.sidebar.caption("Executive Insights for CFO & CRO Briefing")
+
+page = st.sidebar.radio(
+    "Navigation",
+    ["Overview & Spend Efficiency", "Pipeline & Lead Conversion Diagnostics"],
+)
+
+quarters_available = sorted(df_funnel["LEAD_QUARTER"].unique().tolist())
+selected_quarters = st.sidebar.multiselect(
+    "Filter Quarters",
+    quarters_available,
+    default=[q for q in quarters_available if "2026" in str(q)],
+)
+
+if selected_quarters:
+    f_funnel = df_funnel[df_funnel["LEAD_QUARTER"].isin(selected_quarters)]
+    f_opps = df_opps[df_opps["CREATION_QUARTER"].isin(selected_quarters)]
+else:
+    f_funnel = df_funnel.copy()
+    f_opps = df_opps.copy()
+
+# ------------------------------------------------------------------------------
+# PAGE 1: OVERVIEW & SPEND EFFICIENCY
+# ------------------------------------------------------------------------------
+if page == "Overview & Spend Efficiency":
+    st.title("💰 Marketing Spend & Lead Efficiency Overview")
+    st.markdown(
+        "Executive scorecard evaluating program spend, MQL trends, and cost efficiency across quarters."
+    )
+    st.divider()
+
+    # SECTION 1: DISTINCT SPEND SCORECARDS
+    st.subheader("1. Quarter Financial Scorecards")
+
+    # Aggregate distinct spend per quarter to avoid double counting across status rows
+    df_spend_q = (
+        f_funnel.groupby("LEAD_QUARTER")
+        .agg(
+            ACTUAL_SPEND=("ACTUAL_SPEND_USD", "max"),
+            PLANNED_SPEND=("PLANNED_SPEND_USD", "max"),
+            AVG_LEAD_COST=("LEAD_COST", "mean"),
+            TOTAL_LEADS=("QUARTER_LEADS", "max"),
+        )
+        .reset_index()
     )
 
-    filtered_df = df[df['LEAD_QUARTER'].isin(selected_quarters)]
+    cols = st.columns(min(len(df_spend_q), 4))
+    for i, (_, row) in enumerate(df_spend_q.iterrows()):
+        col_idx = i % 4
+        with cols[col_idx]:
+            quarter = row["LEAD_QUARTER"]
+            actual_spend = row["ACTUAL_SPEND"]
+            planned_spend = row["PLANNED_SPEND"]
+            variance = actual_spend - planned_spend
+            cost_per_lead = row["AVG_LEAD_COST"]
 
-    # --- MAIN DISPLAY AREA ---
-    if selected_quarters:
-        view_mode = st.radio(
-            "Choose Analysis View:", 
-            ["Matrix Table View", "Grouped Bar Chart View"], 
-            horizontal=True
+            st.metric(
+                label=f"Quarter {quarter} Spend",
+                value=f"${actual_spend:,.0f}",
+                delta=f"${variance:,.0f} vs Plan" if planned_spend else None,
+                delta_color="inverse",
+            )
+            st.caption(
+                f"**Planned:** ${planned_spend:,.0f} | **Avg Cost/Lead:** ${cost_per_lead:,.2f}"
+            )
+
+    st.divider()
+
+    # SECTION 2: PLANNED VS ACTUAL SPEND & LEAD VOLUMES
+    st.subheader("2. Planned vs. Actual Spend Breakdown")
+
+    col_chart1, col_chart2 = st.columns(2)
+
+    with col_chart1:
+        fig_spend = px.bar(
+            df_spend_q,
+            x="LEAD_QUARTER",
+            y=["PLANNED_SPEND", "ACTUAL_SPEND"],
+            barmode="group",
+            title="Planned vs. Actual Spend (USD)",
+            labels={"value": "Spend (USD)", "LEAD_QUARTER": "Quarter"},
+            color_discrete_sequence=["#94A3B8", "#2563EB"],
         )
-        
-        # Identify the value/percentage column dynamically
-        val_col = 'STATUS_PRC' if 'STATUS_PRC' in filtered_df.columns else filtered_df.columns[-1]
+        fig_spend.update_layout(legend_title_text="Category")
+        st.plotly_chart(fig_spend, use_container_width=True)
 
-        if view_mode == "Matrix Table View":
-            st.subheader("Matrix Comparison: Lead Status % by Quarter")
-            
-            # Pivot table to structure rows as Statuses and columns as Quarters
-            pivot_df = filtered_df.pivot(index='LEAD_STATUS', columns='LEAD_QUARTER', values=val_col)
-            pivot_df = pivot_df.reindex(fixed_categories) # Enforce sort order
-            
-            st.dataframe(
-                pivot_df.style.format("{:.2f}%").background_gradient(cmap="Blues", axis=1),
-                use_container_width=True
-            )
-            
-        else:
-            st.subheader("Visual Distribution Comparison")
-            
-            # Plotly grouped bar chart with locked sort order
-            fig = px.bar(
-                filtered_df.sort_values('LEAD_STATUS'),
-                x='LEAD_STATUS',
-                y=val_col,
-                color='LEAD_QUARTER',
-                barmode='group',
-                category_orders={'LEAD_STATUS': fixed_categories},
-                labels={
-                    'LEAD_STATUS': 'Lead Status Category', 
-                    val_col: 'Percentage Share (%)', 
-                    'LEAD_QUARTER': 'Quarter'
-                },
-                title="Quarter-over-Quarter Share Comparison Across Fixed Categories"
-            )
-            fig.update_layout(xaxis_title="Lead Status", yaxis_title="Percentage (%)")
-            st.plotly_chart(fig, use_container_width=True)
-            
-    else:
-        st.warning("⚠️ Please select at least one quarter from the sidebar to view the analysis.")
-else:
-    st.error("The expected columns 'LEAD_STATUS' and 'LEAD_QUARTER' were not found in your table schema.")
+    with col_chart2:
+        df_status = (
+            f_funnel.groupby(["LEAD_QUARTER", "LEAD_STATUS"])["LEADS_QTY"]
+            .sum()
+            .reset_index()
+        )
+        fig_status = px.bar(
+            df_status,
+            x="LEAD_QUARTER",
+            y="LEADS_QTY",
+            color="LEAD_STATUS",
+            title="Lead Volume Distribution by Status",
+            labels={"LEADS_QTY": "Number of Leads", "LEAD_QUARTER": "Quarter"},
+            color_discrete_sequence=px.colors.qualitative.Set2,
+        )
+        st.plotly_chart(fig_status, use_container_width=True)
+
+    # SECTION 3: DATA TABLE DETAILS
+    st.subheader("3. Lead Funnel Detailed Summary")
+    st.dataframe(
+        f_funnel[
+            [
+                "LEAD_QUARTER",
+                "LEAD_STATUS",
+                "LEADS_QTY",
+                "QUARTER_LEADS",
+                "STATUS_PRC",
+                "PLANNED_SPEND_USD",
+                "ACTUAL_SPEND_USD",
+                "LEAD_COST",
+            ]
+        ],
+        use_container_width=True,
+    )
+
+# ------------------------------------------------------------------------------
+# PAGE 2: PIPELINE & CONVERSION DIAGNOSTICS
+# ------------------------------------------------------------------------------
+elif page == "Pipeline & Lead Conversion Diagnostics":
+    st.title("🎯 Pipeline & Lead Conversion Diagnostics")
+    st.markdown(
+        "Diagnostic findings on pipeline generation, sales cycle lag, and cohort efficiency trends."
+    )
+    st.divider()
+
+    # SECTION 1: EXECUTIVE FINDINGS
+    st.subheader("Executive Diagnostic Summary for CFO & CRO")
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        st.info("💡 **1. MQL Growth Illusion**")
+        st.write(
+            "Top-of-funnel MQLs are up >30% YoY with lower CPL, but opportunity creation dropped **37% in Q3** (357 → 225). Marketing is generating high volume from lower-intent leads."
+        )
+
+    with c2:
+        st.warning("⚠️ **2. Cohort Quality Decay**")
+        st.write(
+            "Win rate on resolved deals decayed **17% relative** (27.2% in Q1 → 22.6% in Q2). Simultaneously, average deal size for Won deals fell **31.6%** ($90.7k → $62.1k)."
+        )
+
+    with c3:
+        st.success("🎯 **3. Q4 $1.5M Spend Reallocation**")
+        st.write(
+            "Stop top-of-funnel high-volume lead programs. Reallocate $1.5M into **Mid-Funnel Acceleration** to convert **$11.8M ARR currently sitting in Proposal and Negotiation**."
+        )
+
+    st.divider()
+
+    # SECTION 2: OPPORTUNITY & ARR BY STAGE
+    st.subheader("Pipeline & ARR Distribution by Opportunity Stage")
+
+    col_p1, col_p2 = st.columns(2)
+
+    with col_p1:
+        df_opp_stage = (
+            f_opps.groupby(["CREATION_QUARTER", "STAGE_NAME"])[
+                "Q_STAGE_OPPORTUNITIES"
+            ]
+            .sum()
+            .reset_index()
+        )
+        fig_opps = px.bar(
+            df_opp_stage,
+            x="CREATION_QUARTER",
+            y="Q_STAGE_OPPORTUNITIES",
+            color="STAGE_NAME",
+            title="Opportunity Count by Creation Quarter & Stage",
+            color_discrete_sequence=px.colors.qualitative.Pastel,
+        )
+        st.plotly_chart(fig_opps, use_container_width=True)
+
+    with col_p2:
+        df_arr_stage = (
+            f_opps.groupby(["CREATION_QUARTER", "STAGE_NAME"])["YEAR_AMOUNT"]
+            .sum()
+            .reset_index()
+        )
+        fig_arr = px.bar(
+            df_arr_stage,
+            x="CREATION_QUARTER",
+            y="YEAR_AMOUNT",
+            color="STAGE_NAME",
+            title="Pipeline ARR ($) by Creation Quarter & Stage",
+            labels={"YEAR_AMOUNT": "ARR (USD)"},
+            color_discrete_sequence=px.colors.qualitative.Safe,
+        )
+        st.plotly_chart(fig_arr, use_container_width=True)
+
+    # SECTION 3: COHORT EFFICIENCY TABLE
+    st.subheader("Cohort Resolution Performance (Q1 vs. Q2 Baseline)")
+
+    # Diagnostic Table
+    summary_data = {
+        "Metric": [
+            "Resolved Deals",
+            "Resolved Win Rate (%)",
+            "Avg ARR per Won Deal ($)",
+            "Closed-Won ARR Realized ($M)",
+        ],
+        "2026Q1 Cohort": ["286", "27.27%", "$90,740", "$7.08M"],
+        "2026Q2 Cohort": ["159", "22.64%", "$62,059", "$2.23M"],
+        "Impact / Variance": [
+            "--",
+            "-4.6 pp (-17.0% decay)",
+            "-31.6% deal size",
+            "Heavy lag / drop",
+        ],
+    }
+    df_diag = pd.DataFrame(summary_data)
+    st.table(df_diag)
