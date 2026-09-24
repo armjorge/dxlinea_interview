@@ -1,0 +1,167 @@
+
+SELECT * 
+FROM DXLINEA_INTERVIEW.RAW_DXLINEA.STG_SFDC_ACCOUNT 
+LIMIT 50; 
+
+SELECT * FROM DXLINEA_INTERVIEW.RAW_DXLINEA.SFDC_OPPORTUNITY
+LIMIT 3;
+
+SELECT * FROM DXLINEA_INTERVIEW.RAW_DXLINEA.STG_MKT_LEAD
+WHERE CREATED_DATE >= TO_DATE('2026-07-01')
+LIMIT 20;
+
+SELECT DISTINCT LEAD_STATUS 
+FROM DXLINEA_INTERVIEW.RAW_DXLINEA.STG_MKT_LEAD
+LIMIT 20;
+
+
+ WITH LEADS_PER_QUARTER AS ( 
+    SELECT 
+        EXTRACT(YEAR FROM created_date) || '-Q' || EXTRACT(QUARTER FROM created_date) AS lead_quarter
+        ,COUNT (DISTINCT LEAD_ID) AS LEADS_QTY
+    FROM DXLINEA_INTERVIEW.RAW_DXLINEA.STG_MKT_LEAD
+    GROUP BY 1
+    )
+
+, LEAD_STATUS_PER_QUARTER AS ( 
+    SELECT 
+        EXTRACT(YEAR FROM created_date) || '-Q' || EXTRACT(QUARTER FROM created_date) AS lead_quarter
+        ,LEAD_STATUS
+        ,COUNT (DISTINCT LEAD_ID) AS LEADS_QTY
+    FROM DXLINEA_INTERVIEW.RAW_DXLINEA.STG_MKT_LEAD
+    GROUP BY 1, 2
+
+)
+
+, LEADS_GROWTH AS ( 
+    SELECT 
+        LSPT_Q.LEAD_QUARTER
+        ,LSPT_Q.LEAD_STATUS
+        ,LSPT_Q.LEADS_QTY
+        ,LDS_PQ.LEADS_QTY AS QUARTER_LEADS
+        ,ROUND((100* LSPT_Q.LEADS_QTY / LDS_PQ.LEADS_QTY ), 2)  AS STATUS_PRC
+    FROM LEAD_STATUS_PER_QUARTER LSPT_Q
+    LEFT JOIN LEADS_PER_QUARTER LDS_PQ
+    ON LSPT_Q.LEAD_QUARTER = LDS_PQ.LEAD_QUARTER
+
+)
+
+SELECT * FROM LEADS_GROWTH 
+WHERE LEAD_STATUS IN ( 'MQL')
+ORDER BY lead_quarter
+-- materialized as 
+
+;
+
+SELECT * FROM DXLINEA_INTERVIEW.WRK_DXLINEA.wrk_sales_funnel
+LIMIT 50; 
+
+SELECT * FROM DXLINEA_INTERVIEW.WRK_DXLINEA.WRK_MKT_CAMPAIGN LIMIT 50; 
+
+WITH LEADS_PER_QUARTER AS ( 
+    SELECT 
+        EXTRACT(YEAR FROM created_date) || 'Q' || EXTRACT(QUARTER FROM created_date) AS lead_quarter
+        ,COUNT (DISTINCT LEAD_ID) AS LEADS_QTY
+    FROM DXLINEA_INTERVIEW.RAW_DXLINEA.stg_mkt_lead
+    GROUP BY 1
+    )
+
+, LEAD_STATUS_PER_QUARTER AS ( 
+    SELECT 
+        EXTRACT(YEAR FROM created_date) || 'Q' || EXTRACT(QUARTER FROM created_date) AS lead_quarter
+        ,LEAD_STATUS
+        ,COUNT (DISTINCT LEAD_ID) AS LEADS_QTY
+    FROM DXLINEA_INTERVIEW.RAW_DXLINEA.stg_mkt_lead
+    GROUP BY 1, 2
+
+    )
+
+, LEADS_GROWTH AS ( 
+    SELECT 
+        LSPT_Q.LEAD_QUARTER
+        ,LSPT_Q.LEAD_STATUS
+        ,LSPT_Q.LEADS_QTY
+        ,LDS_PQ.LEADS_QTY AS QUARTER_LEADS
+        ,ROUND((100* LSPT_Q.LEADS_QTY / LDS_PQ.LEADS_QTY ), 2)  AS STATUS_PRC
+    FROM LEAD_STATUS_PER_QUARTER LSPT_Q
+    LEFT JOIN LEADS_PER_QUARTER LDS_PQ
+    ON LSPT_Q.LEAD_QUARTER = LDS_PQ.LEAD_QUARTER
+    )
+
+
+,quarter_budget as ( 
+    select
+        fiscal_quarter,
+        sum(planned_spend_usd) as planned_spend_usd,
+        sum(actual_spend_usd) as actual_spend_usd,
+    from DXLINEA_INTERVIEW.WRK_DXLINEA.wrk_mkt_campaign
+    group by fiscal_quarter
+
+)
+
+, LEADS_GROWTH_AND_QUARTER_COST AS ( 
+    SELECT 
+        LE_GR.* 
+        ,Q_BDGT.planned_spend_usd
+        ,Q_BDGT.actual_spend_usd
+        ,Q_BDGT.actual_spend_usd / QUARTER_LEADS  as LEAD_COST
+    FROM LEADS_GROWTH LE_GR
+    LEFT JOIN QUARTER_BUDGET Q_BDGT
+    ON Q_BDGT.fiscal_quarter = LE_GR.LEAD_QUARTER
+
+)
+
+SELECT * FROM LEADS_GROWTH_AND_QUARTER_COST LIMIT 50
+-- materialized as wrk_sales_funnel
+; 
+
+
+SELECT * FROM DXLINEA_INTERVIEW.WRK_DXLINEA.wrk_sales_funnel
+WHERE LEAD_QUARTER IN ('2026Q2', '2026Q3')
+ORDER BY LEAD_QUARTER, LEAD_STATUS
+LIMIT 50; 
+
+SELECT DISTINCT LEAD_QUARTER, LEAD_COST
+FROM DXLINEA_INTERVIEW.WRK_DXLINEA.wrk_sales_funnel
+ORDER BY LEAD_QUARTER;
+
+
+--Leads, MQLs and disqualification rate 
+
+WITH funnel_data AS (
+    SELECT 
+        LEAD_STATUS, 
+        LEAD_QUARTER, 
+        STATUS_PRC
+    FROM DXLINEA_INTERVIEW.WRK_DXLINEA.wrk_sales_funnel
+)
+SELECT 
+    LEAD_STATUS,
+    "2025Q1", 
+    "2025Q2", 
+    "2025Q3", 
+    "2025Q4", 
+    "2026Q1", 
+    "2026Q2", 
+    "2026Q3"
+FROM funnel_data
+PIVOT (
+    MAX(STATUS_PRC) FOR LEAD_QUARTER IN (
+        '2025Q1' AS "2025Q1", 
+        '2025Q2' AS "2025Q2", 
+        '2025Q3' AS "2025Q3", 
+        '2025Q4' AS "2025Q4", 
+        '2026Q1' AS "2026Q1", 
+        '2026Q2' AS "2026Q2", 
+        '2026Q3' AS "2026Q3"
+    )
+)
+ORDER BY 
+    CASE LEAD_STATUS
+        WHEN 'MQL' THEN 1
+        WHEN 'New' THEN 2
+        WHEN 'Working' THEN 3
+        WHEN 'Nurture' THEN 4
+        WHEN 'Disqualified' THEN 5
+        ELSE 6
+    END;
