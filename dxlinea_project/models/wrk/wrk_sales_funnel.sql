@@ -44,7 +44,7 @@ WITH LEADS_PER_QUARTER AS (
         LE_GR.* 
         ,Q_BDGT.planned_spend_usd
         ,Q_BDGT.actual_spend_usd
-        ,roun(Q_BDGT.actual_spend_usd / QUARTER_LEADS, 2) as LEAD_COST
+        ,round(Q_BDGT.actual_spend_usd / QUARTER_LEADS, 2) as LEAD_COST
     FROM LEADS_GROWTH LE_GR
     LEFT JOIN QUARTER_BUDGET Q_BDGT
     ON Q_BDGT.fiscal_quarter = LE_GR.LEAD_QUARTER
