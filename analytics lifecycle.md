@@ -30,9 +30,9 @@ Needed work models derived from the analysis will be stored with the prefix wrK_
 
 1. Profile the data before you trust it
 
-- 01 Data profiling  - Referential integrity.sql
+- 01 Data profiling  - Entity Integrity
     - Not critical findings, all the entities contains a unique not null primary key. 
-- 01 Data profiling - Entity Integrity
+- 01 Data profiling - Referential integrity.sql
     - Join between MKT_LEAD and MKT_CAMPAIGN without findings, all the leads are linked to a campaign
     - Join between MKT_TOUCHPOINT and MKT_CAMPAIGN without findings, all the interactions are linked to a campaign
     - Join between MKT_TOUCHPOINT and STG_MKT_LEAD without findings, all the interactions are linked to a lead
