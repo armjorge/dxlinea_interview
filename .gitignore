@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local DuckDB warehouse for the case study. Rebuild with analysis/load_duckdb.py.
+# The file is meant to be queried on this machine and is not part of the repo.
+*.duckdb
+*.duckdb.wal
